@@ -13,7 +13,6 @@ def weights_init(m):
         if m.bias is not None :
             nn.init.zeros_(m.bias)
 
-
 def get_norm_layer(type_norm='none'):
     if type_norm == 'batch' :
         norm = partial(nn.BatchNorm2d, momentum=0.9, affine=True, eps=1.01e-5)
@@ -24,7 +23,6 @@ def get_norm_layer(type_norm='none'):
     else :
         raise NotImplementedError('%s: invalid normalization type'%(type_norm))
     return norm
-
 
 class ResidualBlock(nn.Module):
     def __init__(self, nb_feat, norm):
@@ -43,7 +41,6 @@ class ResidualBlock(nn.Module):
 
     def forward(self, inp):
         return inp + self.block(inp)
-
 
 class ResidualGenerator(nn.Module):
     def __init__(self, opt):
@@ -87,7 +84,6 @@ class ResidualGenerator(nn.Module):
 
     def forward(self, inp):
         return self.block(inp)
-    
 
 class PixelDiscriminator(nn.Module):
     def __init__(self, opt):
@@ -111,7 +107,6 @@ class PixelDiscriminator(nn.Module):
 
     def forward(self, inp):
         return self.block(inp)
-
 
 class PatchDiscriminator(nn.Module):
     def __init__(self, opt):
@@ -156,7 +151,6 @@ class PatchDiscriminator(nn.Module):
             result.append(block(result[-1]))
         return result[1:]
 
-
 class MultiPatchDiscriminator(nn.Module):
     def __init__(self, opt):
         super(MultiPatchDiscriminator, self).__init__()
@@ -171,7 +165,6 @@ class MultiPatchDiscriminator(nn.Module):
                 inp = self.downsample(inp)
             result.append(getattr(self, 'Discriminator_%d'%(n))(inp))
         return result
-
 
 class Loss:
     def __init__(self, opt, device):

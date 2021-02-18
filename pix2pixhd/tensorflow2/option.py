@@ -13,8 +13,8 @@ class BaseOption():
         self.parser.add_argument('--ch_tar', type=int, default=1)
         self.parser.add_argument('--type_gan', type=str, default='lsgan',
                                  help='[lsgan, gan]')
-        self.parser.add_argument('--type_norm', type=str, default='instance',
-                                 help='[none, batch, instance]')
+        self.parser.add_argument('--type_norm', type=str, default='batch',
+                                 help='[none, instance]') 
         self.parser.add_argument('--nb_D', type=int, default=3)
         self.parser.add_argument('--nb_layer', type=int, default=3)
         self.parser.add_argument('--nb_feat_init_D', type=int, default=64)

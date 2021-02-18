@@ -33,7 +33,7 @@ class BaseOption():
             opt.use_sigmoid = False
         else :
             assert True
-        return opt
+        return self.parser.parse_args()
 
 
 class TrainOption(BaseOption):
@@ -43,13 +43,13 @@ class TrainOption(BaseOption):
         self.parser.add_argument('--is_train', type=bool, default=True)
         self.parser.add_argument('--gpu_id', type=int, default=0)
         self.parser.add_argument('--batch_size', type=int, default=64)
-        self.parser.add_argument('--num_workers', type=int, default=4)
-        self.parser.add_argument('--lr', type=float, default=0.0002)
-        self.parser.add_argument('--step_size', type=int, default=100)
-        self.parser.add_argument('--gamma', type=float, default=0.5)
-        self.parser.add_argument('--beta1', type=float, default=0.5)
-        self.parser.add_argument('--beta2', type=float, default=0.999)
-        self.parser.add_argument('--eps', type=float, default=1e-8)
+        self.parser.add_argument('--workers', type=int, default=4)
+        self.parser.add_argument('--initial_learning_rate', type=float, default=0.001)
+        self.parser.add_argument('--decay_steps', type=int, default=1000)
+        self.parser.add_argument('--decay_rate', type=float, default=0.96)
+        self.parser.add_argument('--beta_1', type=float, default=0.5)
+        self.parser.add_argument('--beta_2', type=float, default=0.999)
+        self.parser.add_argument('--epsilon', type=float, default=1e-8)
         self.parser.add_argument('--weight_FM_loss', type=float, default=10.)
 
 
