@@ -227,11 +227,13 @@ class Loss:
 if __name__ == '__main__' :
     from option import TrainOption
     opt = TrainOption().parse()
+#    network_D = PixelDiscriminator(opt)
+#    network_D = PatchDiscriminator(opt)
     network_D = MultiPatchDiscriminator(opt)
     network_G = ResidualGenerator(opt)
 
-    inp = torch.ones((opt.batch_size, opt.ch_inp, opt.height, opt.width))
-    tar = torch.ones((opt.batch_size, opt.ch_tar, opt.height, opt.width))
+    inp = torch.ones((1, 1, 128, 128))
+    tar = torch.ones((1, 1, 128, 128))
 
     print(inp.shape, tar.shape)
 
