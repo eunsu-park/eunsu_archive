@@ -1,5 +1,4 @@
-import argparse
-
+import argparse, math
 
 class BaseOption():
     def __init__(self):
@@ -7,21 +6,23 @@ class BaseOption():
 
         self.parser.add_argument('--prefix', type=str, default='pix2pixhd')
         self.parser.add_argument('--seed', type=int, default=1220)
-        self.parser.add_argument('--height', type=int, default=128)
-        self.parser.add_argument('--width', type=int, default=128)
+        self.parser.add_argument('--height', type=int, default=256)
+        self.parser.add_argument('--width', type=int, default=256)
         self.parser.add_argument('--ch_inp', type=int, default=1)
         self.parser.add_argument('--ch_tar', type=int, default=1)
-        self.parser.add_argument('--type_gan', type=str, default='lsgan',
-                                 help='[lsgan, gan]')
-        self.parser.add_argument('--type_norm', type=str, default='instance',
-                                 help='[none, batch, instance]')
-        self.parser.add_argument('--nb_D', type=int, default=3)
-        self.parser.add_argument('--nb_layer', type=int, default=3)
-        self.parser.add_argument('--nb_feat_init_D', type=int, default=64)
-        self.parser.add_argument('--nb_feat_init_G', type=int, default=64)
-        self.parser.add_argument('--nb_down', type=int, default=4)
-        self.parser.add_argument('--nb_block', type=int, default=9)
+
+        self.parser.add_argument('--type_gan', type=str, default='lsgan')
+
+        self.parser.add_argument('--nb_layer_D', type=int, default=3)
+        self.parser.add_argument('--nb_feature_D_init', type=int, default=64)
+        self.parser.add_argument('--nb_feature_D_max', type=int, default=512)
+
+
+        self.parser.add_argument('--nb_feature_G_init', type=int, default=64)
+        self.parser.add_argument('--nb_feature_G_max', type=int, default=512)
         self.parser.add_argument('--use_tanh', type=bool, default=False)
+
+
         self.parser.add_argument('--root_data', type=str, default='/path/to/data')
         self.parser.add_argument('--root_save', type=str, default='/path/to/save')
 
@@ -33,7 +34,12 @@ class BaseOption():
             opt.use_sigmoid = False
         else :
             assert True
-        return self.parser.parse_args()
+
+        nb_down_height = int(math.log2(opt.height))
+        nb_down_width = int(math.log2(opt.width))
+        opt.nb_down_G = min(nb_down_height, nb_down_width)
+
+        return opt
 
 
 class TrainOption(BaseOption):
