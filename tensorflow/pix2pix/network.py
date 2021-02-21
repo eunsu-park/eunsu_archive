@@ -44,19 +44,16 @@ def Discriminator(opt):
     tar = Input(shape=(None, None, opt.ch_tar), dtype=tf.float32)
 
     nb_feature = opt.nb_feature_D_init
-    features = []
 
     layer = Concat(axis=-1) ([inp, tar])
 
     if opt.nb_layer_D == 0 :
         layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=True) (layer)
         layer = LeakyReLU(0.2) (layer)
-        features.append(layer)
         nb_feature *= 2
         layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=False) (layer)
         layer = BatchNorm2D() (layer)
         layer = LeakyReLU(0.2) (layer)
-        features.append(layer)
         nb_feature = 1
         layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=True) (layer)
 
@@ -64,7 +61,6 @@ def Discriminator(opt):
         layer = ZeroPadding2D(1) (layer)
         layer = Conv2D(filters=nb_feature, kernel_size=4, strides=2, use_bias=True) (layer)
         layer = LeakyReLU(0.2) (layer)
-        features.append(layer)
 
         for i in range(opt.nb_layer_D - 1) :
             nb_feature = min(nb_feature*2, opt.nb_feature_D_max)
@@ -72,14 +68,12 @@ def Discriminator(opt):
             layer = Conv2D(filters=nb_feature, kernel_size=4, strides=2, use_bias=False) (layer)
             layer = BatchNorm2D() (layer)
             layer = LeakyReLU(0.2) (layer)
-            features.append(layer)
 
         nb_feature = min(nb_feature*2, opt.nb_feature_D_max)
         layer = ZeroPadding2D(1) (layer)
         layer = Conv2D(filters=nb_feature, kernel_size=4, strides=1, use_bias=False) (layer)
         layer = BatchNorm2D() (layer)
         layer = LeakyReLU(0.2) (layer)
-        features.append(layer)
 
         nb_feature = 1
         layer = ZeroPadding2D(1) (layer)
@@ -88,7 +82,7 @@ def Discriminator(opt):
     if opt.use_sigmoid == True :
         layer = Sigmoid() (layer)
 
-    model = tf.keras.Model(inputs=[inp, tar], outputs=[layer, features])
+    model = tf.keras.Model(inputs=[inp, tar], outputs=[layer])
     model.summary()
     return model
 
@@ -155,6 +149,58 @@ def Generator(opt):
     return model
 
 
+class TrainStep:
+    def __init__(self, opt):
+        self.weight_l1_loss = opt.weight_l1_loss
+        if opt.type_gan == 'lsgan' :
+            self.loss_function_gan = tf.keras.losses.MeanSquaredError()
+        elif opt.type_gan == 'gan' :
+            self.loss_function_gan = tf.keras.losses.BinaryCrossentropy()
+        self.loss_function_l1 = tf.keras.losses.MeanAbsoluteError()
+
+        lr_schedule_D = tf.keras.optimizers.schedules.ExponentialDecay(
+            initial_learning_rate=opt.initial_learning_rate,
+            decay_steps=opt.decay_steps,
+            decay_rate=opt.decay_rate,
+            staircase=True)
+
+        lr_schedule_G = tf.keras.optimizers.schedules.ExponentialDecay(
+            initial_learning_rate=opt.initial_learning_rate,
+            decay_steps=opt.decay_steps,
+            decay_rate=opt.decay_rate,
+            staircase=True)
+
+        self.optimizer_D = tf.keras.optimizers.Adam(learning_rate=lr_schedule_D,
+            beta_1=opt.beta_1, beta_2=opt.beta_2, epsilon=opt.epsilon)
+        self.optimizer_G = tf.keras.optimizers.Adam(learning_rate=lr_schedule_G,
+            beta_1=opt.beta_1, beta_2=opt.beta_2, epsilon=opt.epsilon)
+
+    def __call__(self, inp, tar, network_D, network_G):
+
+        with tf.GradientTape() as tape_G, tf.GradientTape() as tape_D:
+
+            gen = network_G(inputs=[inp], training=True)
+
+            output_D_real = network_D(inputs=[inp, tar], training=True)
+            output_D_fake = network_D(inputs=[inp, gen], training=True)
+            
+            loss_D_real = self.loss_function_gan(tf.ones_like(output_D_real[0]), output_D_real[0])
+            loss_D_fake = self.loss_function_gan(tf.zeros_like(output_D_fake[0]), output_D_fake[0])
+            loss_D = (loss_D_real + loss_D_fake)/2.
+
+            loss_G_fake = self.loss_function_gan(tf.ones_like(output_D_fake[0]), output_D_fake[0])
+            loss_L = self.loss_function_l1(tar, gen) * self.weight_l1_loss
+            loss_G = loss_G_fake + loss_L
+
+        gradient_G = tape_G.gradient(loss_G, network_G.trainable_variables)
+        gradient_D = tape_D.gradient(loss_D, network_D.trainable_variables)
+
+        self.optimizer_G.apply_gradients(zip(gradient_G, network_G.trainable_variables))
+        self.optimizer_D.apply_gradients(zip(gradient_D, network_D.trainable_variables))
+
+        return loss_D, loss_G_fake, loss_L
+        
+
 if __name__ == '__main__' :
 
     from option import TrainOption
@@ -162,16 +208,23 @@ if __name__ == '__main__' :
 
     network_D = Discriminator(opt)
     network_G = Generator(opt)
+    train_step = TrainStep(opt)
 
-    inp = tf.zeros((opt.batch_size, opt.height, opt.width, opt.ch_inp), dtype=tf.float32)
-    tar = tf.zeros((opt.batch_size, opt.height, opt.width, opt.ch_tar), dtype=tf.float32)
+    inp = tf.ones((opt.batch_size, opt.height, opt.width, opt.ch_inp), dtype=tf.float32)
+    tar = tf.ones((opt.batch_size, opt.height, opt.width, opt.ch_tar), dtype=tf.float32)
 
     gen = network_G([inp])
     print(gen.shape)
     output_D_real = network_D([inp, tar])
-    print(output_D_real[0].shape, len(output_D_real[1]))
+    print(output_D_real.shape)
     output_D_fake = network_D([inp, gen])
-    print(output_D_fake[0].shape, len(output_D_fake[1]))
+    print(output_D_fake.shape)
+    print(gen[0,0:4,0:4,0])
 
+    train_step(inp, tar, network_D, network_G)
+    gen = network_G([inp])
+    print(gen[0,0:4,0:4,0])
     
-    
+    train_step(inp, tar, network_D, network_G)
+    gen = network_G([inp])
+    print(gen[0,0:4,0:4,0])

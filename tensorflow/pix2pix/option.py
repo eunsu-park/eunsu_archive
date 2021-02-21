@@ -22,6 +22,7 @@ class BaseOption():
         self.parser.add_argument('--nb_feature_G_max', type=int, default=512)
         self.parser.add_argument('--use_tanh', type=bool, default=False)
 
+        self.parser.add_argument('--weight_l1_loss', type=float, default=100.)
 
         self.parser.add_argument('--root_data', type=str, default='/path/to/data')
         self.parser.add_argument('--root_save', type=str, default='/path/to/save')
