@@ -126,8 +126,8 @@ if __name__ == '__main__' :
     opt = TrainOption().parse()
     network_D = MultiDiscriminator(opt)
     
-    inp = torch.ones((opt.batch_size, opt.height, opt.width, opt.ch_inp))
-    tar = torch.ones((opt.batch_size, opt.height, opt.width, opt.ch_tar))
+    inp = tf.ones((opt.batch_size, opt.height, opt.width, opt.ch_inp))
+    tar = tf.ones((opt.batch_size, opt.height, opt.width, opt.ch_tar))
 
     print(inp.shape, tar.shape)
 
