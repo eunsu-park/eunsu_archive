@@ -44,6 +44,13 @@ def UpSampling2D(*a, **k):
     return tf.keras.layers.UpSampling2D(*a, **k)
 
 
+class Identity(tf.keras.layers.Layer):
+    def __init__(self, unused_param1=None, unused_param2=None, unused_param3=None):
+        super(Identity, self).__init__()
+    def call(self, inp):
+        return inp
+
+
 class ResidualBlock(tf.keras.layers.Layer):
     def __init__(self, ch_inp):
         super(ResidualBlock, self).__init__()
