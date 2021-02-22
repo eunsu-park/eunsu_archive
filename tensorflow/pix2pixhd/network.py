@@ -1,15 +1,11 @@
 import tensorflow as tf
 
-def get_norm_layer(type_norm='none'):
-    if type_norm == 'batch' :
-        norm = tf.keras.layers.BatchNormalization#(beta1=0.5, beta2=0.999, eps=1e-8)
-        use_bias = False
-    elif type_norm == 'none' :
-        norm = Identity
-        use_bias = True
-    else :
-        raise NotImplementedError('%s: invalid normalization type'%(type_norm))
-    return norm, use_bias
+
+def Input(*a, **k):
+    return tf.keras.layers.Input(*a, **k)
+
+def Concat(*a, **k):
+    return tf.keras.layers.Concatenate(*a, **k) 
 
 def Conv2D(*a, **k):
     return tf.keras.layers.Conv2D(*a, **k)
@@ -17,14 +13,20 @@ def Conv2D(*a, **k):
 def Conv2DTranspose(*a, **k):
     return tf.keras.layers.Conv2DTranspose(*a, **k)
 
-def UpSampling2D(*a, **k):
-    return tf.keras.layers.UpSampling2D(*a, **k)
+def BatchNorm2D(*a, **k):
+    return tf.keras.layers.BatchNormalization(*a, **k)#(beta1=0.5, beta2=0.999, eps=1e-8)
+
+def LeakyReLU(*a, **k):
+    return tf.keras.layers.LeakyReLU(*a, **k)
 
 def ReLU(*a, **k):
     return tf.keras.layers.ReLU(*a, **k)
 
-def LeakyReLU(*a, **k):
-    return tf.keras.layers.LeakyReLU(*a, **k)
+def Sigmoid(*a, **k):
+    return tf.keras.layers.Activation('sigmoid', *a, **k)
+
+def Tanh(*a, **k):
+    return tf.keras.layers.Activation('tanh', *a, **k)
 
 def ZeroPadding2D(*a, **k):
     return tf.keras.layers.ZeroPadding2D(*a, **k)
@@ -32,136 +34,102 @@ def ZeroPadding2D(*a, **k):
 def Cropping2D(*a, **k):
     return tf.keras.layers.Cropping2D(*a, **k)
 
-class Identity(tf.keras.layers.Layer):
-    def __init__(self, unused_param1=None, unused_param2=None, unused_param3=None):
-        super(Identity, self).__init__()
-    def call(self, inp):
-        return inp
+def Dropout(*a, **k):
+    return tf.keras.layers.Dropout(*a, **k)
 
-class ReflectPadding2D(tf.keras.layers.Layer):
-    def __init__(self, padding):
-        super(ReflectPadding2D, self).__init__()
-        if type(padding) == int :
-            padding = (padding, padding)
-        self.padding = ((0, 0), (padding[0], padding[0]), 
-                        (padding[1], padding[1]), (0, 0))
-    def call(self, inp):
-        return tf.pad(inp, paddings=self.padding, mode='REFLECT')
-
-class ResidualBlock(tf.keras.layers.Layer):
-    def __init__(self, ch_inp, type_norm='none'):
-        super(ResidualBlock, self).__init__()
-        Norm, use_bias = get_norm_layer(type_norm)
-        self.Norm = Norm
-        self.use_bias = use_bias
-
-        self.conv1 = Conv2D(ch_inp, kernel_size=3, strides=1,
-                             padding='valid', use_bias=use_bias)
-        self.norm1 = Norm()
-        self.conv2 = Conv2D(ch_inp, kernel_size=3, strides=1,
-                             padding='valid', use_bias=use_bias)
-        self.norm2 = Norm()
-
-    def call(self, inp, training=False):
-        x = self.conv1(inp)
-        x = self.norm1(x)
-        x = ReLU() (x)
-        x = self.conv2(x)
-        x = self.norm2(x)
-        x += inp
-        return x
+def AveragePooling2D(*a, **k):
+    return tf.keras.layers.AveragePooling2D(*a, **k)
 
 
-def PatchDiscriminator(opt):
-    inp = tf.keras.layers.Input(shape=(None, None, opt.ch_inp))
-    tar = tf.keras.layers.Input(shape=(None, None, opt.ch_tar))
-    layer = tf.keras.layers.Concatenate(-1) ([inp, tar])
-    features = []
-    Norm, use_bias = get_norm_layer(opt.type_norm)
-    nb_feature = 64
-    nb_feature_max = 512
+def Discriminator(opt):
     
-    layer = ZeroPadding2D(1) (layer)
-    layer = Conv2D(nb_feature, kernel_size=4, strides=2,
-                   padding='valid', use_bias=True) (layer)
-    layer = LeakyReLU(0.2) (layer)
-    features.append(layer)
+    inp = Input(shape=(None, None, opt.ch_inp), dtype=tf.float32)
+    tar = Input(shape=(None, None, opt.ch_tar), dtype=tf.float32)
+    features = []
 
-    for n in range(nb_layer - 1):
-        nb_feature = min(nb_feature*2, nb_feature_max)
+    nb_feature = opt.nb_feature_D_init
+
+    layer = Concat(axis=-1) ([inp, tar])
+
+    if opt.nb_layer_D == 0 :
+        layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=True) (layer)
+        layer = LeakyReLU(0.2) (layer)
+        features.append(layer)
+        nb_feature *= 2
+        layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=False) (layer)
+        layer = BatchNorm2D() (layer)
+        layer = LeakyReLU(0.2) (layer)
+        features.append(layer)
+        nb_feature = 1
+        layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=True) (layer)
+
+    elif opt.nb_layer_D > 0 :
         layer = ZeroPadding2D(1) (layer)
-        layer = Conv2D(nb_feature, kernel_size=4, strides=2,
-                       padding='valid', use_bias=use_bias) (layer)
-        layer = Norm() (layer)
+        layer = Conv2D(filters=nb_feature, kernel_size=4, strides=2, use_bias=True) (layer)
         layer = LeakyReLU(0.2) (layer)
         features.append(layer)
 
-    nb_feature = min(nb_feature*2, nb_feature_max)
-    layer = ZeroPadding2D(1) (layer)
-    layer = Conv2D(nb_feature, kernel_size=4, strides=1,
-                   padding='valid', use_bias=use_bias) (layer)
-    layer = Norm() (layer)
-    layer = LeakyReLU(0.2) (layer)
-    features.append(layer)
+        for i in range(opt.nb_layer_D - 1) :
+            nb_feature = min(nb_feature*2, opt.nb_feature_D_max)
+            layer = ZeroPadding2D(1) (layer)
+            layer = Conv2D(filters=nb_feature, kernel_size=4, strides=2, use_bias=False) (layer)
+            layer = BatchNorm2D() (layer)
+            layer = LeakyReLU(0.2) (layer)
+            features.append(layer)
 
-    layer = ZeroPadding2D(1) (layer)
-    layer = Conv2D(ch_tar, kernel_size=4, strides=1,
-                   padding='valid', use_bias=True) (layer)
+        nb_feature = min(nb_feature*2, opt.nb_feature_D_max)
+        layer = ZeroPadding2D(1) (layer)
+        layer = Conv2D(filters=nb_feature, kernel_size=4, strides=1, use_bias=False) (layer)
+        layer = BatchNorm2D() (layer)
+        layer = LeakyReLU(0.2) (layer)
+        features.append(layer)
+
+        nb_feature = 1
+        layer = ZeroPadding2D(1) (layer)
+        layer = Conv2D(filters=nb_feature, kernel_size=4, strides=1, use_bias=True) (layer)
+
     if opt.use_sigmoid == True :
-        layer = tf.keras.layers.Activation('sigmoid') (layer)
-    return tf.keras.Model(inputs=[inp, tar], outputs=[layer, features])
+        layer = Sigmoid() (layer)
 
-def ResidualGenerator(opt):
-    
-    inp = tf.keras.layers.Input(shape=(None, None, opt.ch_inp))
-    layer = inp
-    Norm, use_bias = get_norm_layer(opt.type_norm)
-    nb_feature = 64
+    model = tf.keras.Model(inputs=[inp, tar], outputs=[layer, features])
+    model.summary()
+    return model
 
-    layer = ReflectPadding2D(3) (layer)
-    layer = Conv2D(nb_feature, kernel_size=7, strides=1,
-                   padding='valid', use_bias=use_bias) (layer)
-    layer = Norm() (layer)
-    layer = ReLU() (layer)
 
-    for i in range(nb_down):
-        nb_feature *= 2
-        layer = ZeroPadding2D(1) (layer)
-        layer = Conv2D(nb_feature, kernel_size=3, strides=2,
-                       padding='valid', use_bias=use_bias) (layer)
-        layer = Norm() (layer)
-        layer = ReLU() (layer)
+def MultiDiscriminator(opt):
+    inp = Input(shape=(None, None, opt.ch_inp), dtype=tf.float32)
+    tar = Input(shape=(None, None, opt.ch_tar), dtype=tf.float32)
 
-    for j in range(nb_block):
-        layer = ResidualBlock(nb_feature, type_norm=opt.type_norm) (layer)
+    Ds = []
+    outputs = []
+    features = []
+    for n in range(opt.nb_D):
+        Ds.append(Discriminator(opt))
+    for n in range(opt.nb_D):
+        if n > 0 :
+            inp = AveragePooling2D(2) (inp)
+            tar = AveragePooling2D(2) (tar)
+        output, feature = Ds[n] ([inp, tar])
+        outputs.append(output)
+        features.append(feature)
 
-    for k in range(nb_down):
-        nb_feature //= 2
-        layer = UpSampling2D(2) (layer)
-        layer = ZeroPadding2D(1) (layer)
-        layer = Conv2D(nb_feature, kernel_size=3, strides=1,
-                       padding='valid', use_bias=use_bias) (layer)
-        layer = Norm() (layer)
-        layer = ReLU() (layer)
-
-    layer = ReflectPadding2D(3) (layer)
-    layer = Conv2D(ch_tar, kernel_size=7, strides=1,
-                   padding='valid', use_bias=True) (layer)
-
-    if use_tanh == True :
-        layer = tf.keras.layers.Activation('tanh') (layer)
-    return tf.keras.Model(inputs=[inp], outputs=[layer])
+    model = tf.keras.Model(inputs=[inp, tar], outputs=[layers, features])
+    model.summary()
+    return model
 
 
 if __name__ == '__main__' :
     from option import TrainOption
     opt = TrainOption().parse()
-    network_D = PatchDiscriminator(opt)
-
+    network_D = MultiDiscriminator(opt)
+    
     inp = torch.ones((opt.batch_size, opt.height, opt.width, opt.ch_inp))
     tar = torch.ones((opt.batch_size, opt.height, opt.width, opt.ch_tar))
 
     print(inp.shape, tar.shape)
 
     disk_D, features_D = network_D([inp, tar])
-    print(disk_D.shape)
+    for n in range(opt.nb_D):
+        disk_D_ = disk_D[n]
+        features_D_ = features_D[n]
+        print(disk_D_.shape, len(features_D_))

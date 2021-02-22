@@ -57,7 +57,6 @@ class TrainOption(BaseOption):
         self.parser.add_argument('--beta_1', type=float, default=0.5)
         self.parser.add_argument('--beta_2', type=float, default=0.999)
         self.parser.add_argument('--epsilon', type=float, default=1e-8)
-        self.parser.add_argument('--weight_FM_loss', type=float, default=10.)
 
 
 class TestOption(BaseOption):
