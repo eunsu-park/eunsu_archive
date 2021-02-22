@@ -162,7 +162,7 @@ def ResidualGenerator(opt):
     inp = tf.keras.layers.Input(shape=(None, None, opt.ch_inp))
     nb_feature = opt.nb_feature_G_init
 
-    layer = ReflectPadding2D(3) (layer)
+    layer = ReflectPadding2D(3) (inp)
     layer = Conv2D(nb_feature, kernel_size=7, strides=1,
                    padding='valid', use_bias=False) (layer)
     layer = BatchNorm2D() (layer)
@@ -208,11 +208,13 @@ if __name__ == '__main__' :
     
     inp = tf.ones((opt.batch_size, opt.height, opt.width, opt.ch_inp))
     tar = tf.ones((opt.batch_size, opt.height, opt.width, opt.ch_tar))
+    gen = network_G([inp])
 
-    print(inp.shape, tar.shape)
+    print(inp.shape, tar.shape, gen.shape)
 
     disk_D, features_D = network_D([inp, tar])
     for n in range(opt.nb_D):
         disk_D_ = disk_D[n]
         features_D_ = features_D[n]
         print(disk_D_.shape, len(features_D_))
+
