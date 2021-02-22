@@ -188,10 +188,7 @@ def ResidualGenerator(opt):
 
     for k in range(opt.nb_down_G):
         nb_feature //= 2
-        layer = UpSampling2D(2) (layer)
-        layer = ZeroPadding2D(1) (layer)
-        layer = Conv2D(nb_feature, kernel_size=3, strides=1,
-                       padding='valid', use_bias=False) (layer)
+        layer = Conv2DTranspose(nb_feature, kernel_size=3, strides=2, padding='same', use_bias=False) (layer)
         layer = BatchNorm2D() (layer)
         layer = ReLU() (layer)
 
