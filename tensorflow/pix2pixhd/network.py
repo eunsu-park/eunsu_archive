@@ -40,6 +40,42 @@ def Dropout(*a, **k):
 def AveragePooling2D(*a, **k):
     return tf.keras.layers.AveragePooling2D(*a, **k)
 
+def UpSampling2D(*a, **k):
+    return tf.keras.layers.UpSampling2D(*a, **k)
+
+
+class ResidualBlock(tf.keras.layers.Layer):
+    def __init__(self, ch_inp):
+        super(ResidualBlock, self).__init__()
+        self.conv1 = Conv2D(ch_inp, kernel_size=3, strides=1,
+                             padding='valid', use_bias=False)
+        self.norm1 = BatchNorm2D()
+        self.conv2 = Conv2D(ch_inp, kernel_size=3, strides=1,
+                             padding='valid', use_bias=False)
+        self.norm2 = BatchNorm2D()
+
+    def call(self, inp):
+        x = ZeroPadding2D(1) (inp)
+        x = self.conv1(x)
+        x = self.norm1(x)
+        x = ReLU() (x)
+        x = ZeroPadding2D(1) (x)
+        x = self.conv2(x)
+        x = self.norm2(x)
+        x += inp
+        return x
+
+
+class ReflectPadding2D(tf.keras.layers.Layer):
+    def __init__(self, padding):
+        super(ReflectPadding2D, self).__init__()
+        if type(padding) == int :
+            padding = (padding, padding)
+        self.padding = ((0, 0), (padding[0], padding[0]), 
+                        (padding[1], padding[1]), (0, 0))
+    def call(self, inp):
+        return tf.pad(inp, paddings=self.padding, mode='REFLECT')
+
 
 def Discriminator(opt):
     
@@ -121,10 +157,54 @@ def MultiDiscriminator(opt):
     return model
 
 
+def ResidualGenerator(opt):
+    
+    inp = tf.keras.layers.Input(shape=(None, None, opt.ch_inp))
+    nb_feature = opt.nb_feature_G_init
+
+    layer = ReflectPadding2D(3) (layer)
+    layer = Conv2D(nb_feature, kernel_size=7, strides=1,
+                   padding='valid', use_bias=False) (layer)
+    layer = BatchNorm2D() (layer)
+    layer = ReLU() (layer)
+
+    for i in range(opt.nb_down_G):
+        nb_feature *= 2
+        layer = ZeroPadding2D(1) (layer)
+        layer = Conv2D(nb_feature, kernel_size=3, strides=2,
+                       padding='valid', use_bias=False) (layer)
+        layer = BatchNorm2D() (layer)
+        layer = ReLU() (layer)
+
+    for j in range(opt.nb_block_G):
+        layer = ResidualBlock(nb_feature) (layer)
+
+    for k in range(opt.nb_down_G):
+        nb_feature //= 2
+        layer = UpSampling2D(2) (layer)
+        layer = ZeroPadding2D(1) (layer)
+        layer = Conv2D(nb_feature, kernel_size=3, strides=1,
+                       padding='valid', use_bias=False) (layer)
+        layer = BatchNorm2D() (layer)
+        layer = ReLU() (layer)
+
+    layer = ReflectPadding2D(3) (layer)
+    layer = Conv2D(opt.ch_tar, kernel_size=7, strides=1,
+                   padding='valid', use_bias=True) (layer)
+
+    if opt.use_tanh == True :
+        layer = Tanh() (layer)
+    
+    model = tf.keras.Model(inputs=[inp], outputs=[layer])
+    model.summary()
+    return model
+
+
 if __name__ == '__main__' :
     from option import TrainOption
     opt = TrainOption().parse()
     network_D = MultiDiscriminator(opt)
+    network_G = ResidualGenerator(opt)
     
     inp = tf.ones((opt.batch_size, opt.height, opt.width, opt.ch_inp))
     tar = tf.ones((opt.batch_size, opt.height, opt.width, opt.ch_tar))
