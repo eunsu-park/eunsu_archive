@@ -100,6 +100,9 @@ def MultiDiscriminator(opt):
     inp = Input(shape=(None, None, opt.ch_inp), dtype=tf.float32)
     tar = Input(shape=(None, None, opt.ch_tar), dtype=tf.float32)
 
+    inp_layer = inp
+    tar_layer = tar
+
     Ds = []
     outputs = []
     features = []
@@ -107,9 +110,9 @@ def MultiDiscriminator(opt):
         Ds.append(Discriminator(opt))
     for n in range(opt.nb_D):
         if n > 0 :
-            inp = AveragePooling2D(2) (inp)
-            tar = AveragePooling2D(2) (tar)
-        output, feature = Ds[n] ([inp, tar])
+            inp_layer = AveragePooling2D(2) (inp_layer)
+            tar_layer = AveragePooling2D(2) (tar_layer)
+        output, feature = Ds[n] ([inp_layer, tar_layer])
         outputs.append(output)
         features.append(feature)
 
