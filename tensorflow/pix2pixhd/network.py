@@ -113,7 +113,7 @@ def MultiDiscriminator(opt):
         outputs.append(output)
         features.append(feature)
 
-    model = tf.keras.Model(inputs=[inp, tar], outputs=[layers, features])
+    model = tf.keras.Model(inputs=[inp, tar], outputs=[outputs, features])
     model.summary()
     return model
 
