@@ -19,7 +19,6 @@ class BaseOption():
         self.parser.add_argument('--nb_feature_D_init', type=int, default=64)
         self.parser.add_argument('--nb_feature_D_max', type=int, default=512)
 
-
         self.parser.add_argument('--nb_feature_G_init', type=int, default=64)
         self.parser.add_argument('--nb_feature_G_max', type=int, default=512)
         self.parser.add_argument('--nb_down_G', type=int, default=4)
