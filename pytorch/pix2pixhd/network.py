@@ -51,7 +51,7 @@ class ResidualGenerator(nn.Module):
         print(self)
 
     def build(self):
-        nb_feat = self.opt.nb_feat_init_G
+        nb_feat = self.opt.nb_feature_init_G
         norm = get_norm_layer(self.opt.type_norm)
         act = nn.ReLU()
 
@@ -60,15 +60,15 @@ class ResidualGenerator(nn.Module):
                   nn.Conv2d(self.opt.ch_inp, nb_feat, kernel_size=7, stride=1, padding=0),
                   norm(nb_feat), act]
 
-        for i in range(self.opt.nb_down):
+        for i in range(self.opt.nb_down_G):
             block += [nn.Conv2d(nb_feat, nb_feat*2, kernel_size=3, stride=2, padding=1),
                       norm(nb_feat*2), act]
             nb_feat *= 2
 
-        for j in range(self.opt.nb_block):
+        for j in range(self.opt.nb_block_G):
             block += [ResidualBlock(nb_feat, norm)]
 
-        for k in range(self.opt.nb_down):
+        for k in range(self.opt.nb_down_G):
             block += [nn.ConvTranspose2d(nb_feat, nb_feat//2, kernel_size=3, stride=2, padding=1, output_padding=1),
                       norm(nb_feat//2), act]
             nb_feat //=2
@@ -93,7 +93,7 @@ class PixelDiscriminator(nn.Module):
         print(self)
 
     def build(self):
-        nb_feat = self.opt.nb_feat_init_D
+        nb_feat = self.opt.nb_feature_init_D
         norm = get_norm_layer(self.opt.type_norm)
 
         block = [nn.Conv2d(self.opt.ch_inp+self.opt.ch_tar, nb_feat, kernel_size=1, stride=1, padding=0),
@@ -116,7 +116,7 @@ class PatchDiscriminator(nn.Module):
         print(self)
 
     def build(self):
-        nb_feat = self.opt.nb_feat_init_D
+        nb_feat = self.opt.nb_feature_init_D
         norm = get_norm_layer(self.opt.type_norm)
         
         blocks = []
@@ -124,7 +124,7 @@ class PatchDiscriminator(nn.Module):
                  nn.LeakyReLU(0.2)]
         blocks.append(block)
 
-        for n in range(1, self.opt.nb_layer):
+        for n in range(1, self.opt.nb_layer_D):
             block = [nn.Conv2d(nb_feat, nb_feat*2, kernel_size=4, stride=2, padding=1),
                      norm(nb_feat*2), nn.LeakyReLU(0.2)]
             blocks.append(block)
