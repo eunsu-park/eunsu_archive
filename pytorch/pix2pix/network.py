@@ -1,90 +1,142 @@
-import tensorflow as tf
+import torch
+import torch.nn as nn
+from torch.nn import init
+
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.normal_(m.weight, 0.0, 0.02)
+        if m.bias is not None :
+            nn.init.zeros_(m.bias)
+    elif isinstance(m, nn.BatchNorm2d):
+        nn.init.normal_(m.weight, 1.0, 0.02)
+        if m.bias is not None :
+            nn.init.zeros_(m.bias)
 
 
-def Input(*a, **k):
-    return tf.keras.layers.Input(*a, **k)
+class PixelDiscriminator(nn.Module):
+    def __init__(self, opt):
+        super(PixelDiscriminator, self).__init__()
+        self.opt = opt
+        self.build()
+        print(self)
 
-def Concat(*a, **k):
-    return tf.keras.layers.Concatenate(*a, **k) 
+    def build(self):
+        nb_feat = self.opt.nb_feature_init_D
+        norm = get_norm_layer(self.opt.type_norm)
 
-def Conv2D(*a, **k):
-    return tf.keras.layers.Conv2D(*a, **k)
+        block = [nn.Conv2d(self.opt.ch_inp+self.opt.ch_tar, nb_feat, kernel_size=1, stride=1, padding=0),
+                 nn.LeakyReLU(0.2),
+                 nn.Conv2d(nb_feat, nb_feat*2, kernel_size=1, stride=1, padding=0),
+                 norm(nb_feat*2), nn.LeakyReLU(0.2),
+                 nn.Conv2d(nb_feat*2, 1, kernel_size=1, stride=1, padding=0)]
+        if self.opt.use_sigmoid :
+            block += [nn.Sigmoid()]
+        self.block = nn.Sequential(*block)
 
-def Conv2DTranspose(*a, **k):
-    return tf.keras.layers.Conv2DTranspose(*a, **k)
-
-def BatchNorm2D(*a, **k):
-    return tf.keras.layers.BatchNormalization(*a, **k)#(beta1=0.5, beta2=0.999, eps=1e-8)
-
-def LeakyReLU(*a, **k):
-    return tf.keras.layers.LeakyReLU(*a, **k)
-
-def ReLU(*a, **k):
-    return tf.keras.layers.ReLU(*a, **k)
-
-def Sigmoid(*a, **k):
-    return tf.keras.layers.Activation('sigmoid', *a, **k)
-
-def Tanh(*a, **k):
-    return tf.keras.layers.Activation('tanh', *a, **k)
-
-def ZeroPadding2D(*a, **k):
-    return tf.keras.layers.ZeroPadding2D(*a, **k)
-
-def Cropping2D(*a, **k):
-    return tf.keras.layers.Cropping2D(*a, **k)
-
-def Dropout(*a, **k):
-    return tf.keras.layers.Dropout(*a, **k)
+    def forward(self, inp):
+        return self.block(inp)
 
 
-def Discriminator(opt):
+class PatchDiscriminator(nn.Module):
+    def __init__(self, opt):
+        super(PatchDiscriminator, self).__init__()
+        self.opt = opt
+        self.build()
+        print(self)
 
-    inp = Input(shape=(None, None, opt.ch_inp), dtype=tf.float32)
-    tar = Input(shape=(None, None, opt.ch_tar), dtype=tf.float32)
+    def build(self):
+        nb_feat = self.opt.nb_feature_init_D
+        norm = get_norm_layer(self.opt.type_norm)
+        
+        blocks = []
+        block = [nn.Conv2d(self.opt.ch_inp+self.opt.ch_tar, nb_feat, kernel_size=4, stride=2, padding=1),
+                 nn.LeakyReLU(0.2)]
+        blocks.append(block)
 
-    nb_feature = opt.nb_feature_D_init
+        for n in range(1, self.opt.nb_layer_D):
+            block = [nn.Conv2d(nb_feat, nb_feat*2, kernel_size=4, stride=2, padding=1),
+                     norm(nb_feat*2), nn.LeakyReLU(0.2)]
+            blocks.append(block)
+            nb_feat *= 2
 
-    layer = Concat(axis=-1) ([inp, tar])
+        block = [nn.Conv2d(nb_feat, nb_feat*2, kernel_size=4, stride=1, padding=1),
+                 norm(nb_feat*2), nn.LeakyReLU(0.2)]
+        blocks.append(block)
+        nb_feat *= 2
 
-    if opt.nb_layer_D == 0 :
-        layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=True) (layer)
-        layer = LeakyReLU(0.2) (layer)
-        nb_feature *= 2
-        layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=False) (layer)
-        layer = BatchNorm2D() (layer)
-        layer = LeakyReLU(0.2) (layer)
-        nb_feature = 1
-        layer = Conv2D(filters=nb_feature, kernel_size=1, strides=1, use_bias=True) (layer)
+        block = [nn.Conv2d(nb_feat, 1, kernel_size=4, stride=1, padding=1)]
+        if self.opt.use_sigmoid :
+            block += [nn.Sigmoid()]
+        blocks.append(block)
 
-    elif opt.nb_layer_D > 0 :
-        layer = ZeroPadding2D(1) (layer)
-        layer = Conv2D(filters=nb_feature, kernel_size=4, strides=2, use_bias=True) (layer)
-        layer = LeakyReLU(0.2) (layer)
+        self.nb_blocks = len(blocks)
+        for i in range(self.nb_blocks):
+            setattr(self, 'block_%d'%(i), nn.Sequential(*blocks[i]))
 
-        for i in range(opt.nb_layer_D - 1) :
-            nb_feature = min(nb_feature*2, opt.nb_feature_D_max)
-            layer = ZeroPadding2D(1) (layer)
-            layer = Conv2D(filters=nb_feature, kernel_size=4, strides=2, use_bias=False) (layer)
-            layer = BatchNorm2D() (layer)
-            layer = LeakyReLU(0.2) (layer)
+    def forward(self, inp):
+        result = [inp]
+        for n in range(self.nb_blocks):
+            block = getattr(self, 'block_%d'%(n))
+            result.append(block(result[-1]))
+        return result[1:]
 
-        nb_feature = min(nb_feature*2, opt.nb_feature_D_max)
-        layer = ZeroPadding2D(1) (layer)
-        layer = Conv2D(filters=nb_feature, kernel_size=4, strides=1, use_bias=False) (layer)
-        layer = BatchNorm2D() (layer)
-        layer = LeakyReLU(0.2) (layer)
 
-        nb_feature = 1
-        layer = ZeroPadding2D(1) (layer)
-        layer = Conv2D(filters=nb_feature, kernel_size=4, strides=1, use_bias=True) (layer)
+class UNetGenerator(nn.Module):
+    def __init__(self, opt):
+        super(UNetGenerator, self).__init__()
 
-    if opt.use_sigmoid == True :
-        layer = Sigmoid() (layer)
+        self.build()
+        print(self)
 
-    model = tf.keras.Model(inputs=[inp, tar], outputs=[layer])
-    model.summary()
-    return model
+    def build(self, opt):
+        nb_feature = opt.nb_feature_G_init
+        self.dconv1 = nn.Conv2d(opt.ch_inp, nb_feature, kernel_size=4, strides=2, use_bias=True)
+        self.dconv2 = nn.Conv2d(nb_feature, 2*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.dnorm2 = nn.BatchNorm2d(2*nb_feature)
+        self.dconv3 = nn.Conv2d(2*nb_feature, 4*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.dnorm3 = nn.BatchNorm2d(4*nb_feature)
+        self.dconv4 = nn.Conv2d(4*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.dnorm4 = nn.BatchNorm2d(8*nb_feature)
+        self.dconv5 = nn.Conv2d(8*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.dnorm5 = nn.BatchNorm2d(8*nb_feature)
+        self.dconv6 = nn.Conv2d(8*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.dnorm6 = nn.BatchNorm2d(8*nb_feature)
+        self.dconv7 = nn.Conv2d(8*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.dnorm7 = nn.BatchNorm2d(8*nb_feature)
+        self.dconv8 = nn.Conv2d(8*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=True)
+
+        self.uconv8 = nn.ConvTranspose2d(8*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.unorm8 = nn.BatchNorm2d(8*nb_feature)
+        self.uconv7 = nn.ConvTranspose2d(8*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.unorm7 = nn.BatchNorm2d(8*nb_feature)
+        self.uconv6 = nn.ConvTranspose2d(8*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.unorm6 = nn.BatchNorm2d(8*nb_feature)
+        self.uconv5 = nn.ConvTranspose2d(8*nb_feature, 8*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.unorm5 = nn.BatchNorm2d(8*nb_feature)
+        self.uconv4 = nn.ConvTranspose2d(8*nb_feature, 4*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.unorm4 = nn.BatchNorm2d(4*nb_feature)
+        self.uconv3 = nn.ConvTranspose2d(4*nb_feature, 2*nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.unorm3 = nn.BatchNorm2d(2*nb_feature)
+        self.uconv2 = nn.ConvTranspose2d(2*nb_feature, nb_feature, kernel_size=4, strides=2, use_bias=False)
+        self.unorm2 = nn.BatchNorm2d(nb_feature)
+        self.uconv1 = nn.ConvTranspose2d(nb_feature, opt.ch_tar, kernel_size=4, strides=2, use_bias=True)
+
+    def forward(self, inp):
+        layer = self.dconv1(inp)
+        layer = nn.LeakyReLU(0.2) (layer)
+        layer = self.dconv
+
+
+
+
+
+        
+
+        self.parser.add_argument('--nb_feature_G_init', type=int, default=64)
+        self.parser.add_argument('--nb_feature_G_max', type=int, default=512)
+        self.parser.add_argument('--use_tanh', type=bool, default=False)
+
+
 
 
 
