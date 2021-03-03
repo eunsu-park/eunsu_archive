@@ -149,6 +149,7 @@ def Generator(opt):
     return model
 
 
+
 class TrainStep:
     def __init__(self, opt):
         self.weight_l1_loss = opt.weight_l1_loss
